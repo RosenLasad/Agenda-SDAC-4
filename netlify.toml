@@ -1,0 +1,8 @@
+[build]
+  functions = "netlify/functions"
+  publish = "."
+
+[[redirects]]
+  from = "/api/agenda"
+  to = "/.netlify/functions/agenda"
+  status = 200
