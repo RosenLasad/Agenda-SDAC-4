@@ -439,6 +439,14 @@
         syncFromCloudOrSeed(!!forcePull);
       }, 350);
     }
+
+    function handleManualCloudRefresh(){
+      if(!isLoggedIn()){
+        alert("Accedi prima al cloud SDAC.");
+        return;
+      }
+      scheduleRemoteRefresh(true);
+    }
     // --- /Cloud sync ---
 
     // DOM
@@ -467,6 +475,7 @@
     var btnExport = $("#btnExport");
     var importFile = $("#importFile");
     var btnReset = $("#btnReset");
+    var btnCloudRefresh = $("#btnCloudRefresh");
 
     var todoSearch = $("#todoSearch");
     var todoFilter = $("#todoFilter");
@@ -2301,6 +2310,10 @@ window.addEventListener("appinstalled", function(){
 
 if(installBtn){
   installBtn.addEventListener("click", handleInstallClick);
+}
+
+if(btnCloudRefresh){
+  btnCloudRefresh.addEventListener("click", handleManualCloudRefresh);
 }
 
 if("serviceWorker" in navigator){
