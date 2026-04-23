@@ -5,11 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>SDAC Agenda - Calendario condiviso della Scuola D'Arte Cinematografica di Genova</title>
-  <meta name="theme-color" content="#9f1020">
+  <meta name="theme-color" id="themeColorMeta" content="#9f1020">
   <meta name="description" content="SDAC Agenda: calendario condiviso, taccuino e rubrica per la Scuola D'Arte Cinematografica di Genova.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SDAC Agenda">
+  <script>
+    (function(){
+      try{
+        var theme = localStorage.getItem("sdac_agenda_theme");
+        if(theme === "light" || theme === "dark"){
+          document.documentElement.setAttribute("data-theme", theme);
+          document.documentElement.style.colorScheme = theme;
+          var meta = document.getElementById("themeColorMeta");
+          if(meta) meta.setAttribute("content", theme === "light" ? "#efe6d7" : "#9f1020");
+        }
+      }catch(e){}
+    })();
+  </script>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -17,6 +30,141 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <style>
+    .brandRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .themeToggleBtn{
+      width:34px;
+      height:34px;
+      padding:0;
+      justify-content:center;
+      gap:0;
+      border-radius:999px;
+      border-color:rgba(122,162,255,.38);
+      background:rgba(255,255,255,.045);
+      color:rgba(244,238,221,.96);
+      box-shadow:0 4px 14px rgba(24,10,13,.18);
+      flex:0 0 auto;
+      transition:border-color .16s ease, background .16s ease, transform .12s ease, box-shadow .16s ease;
+    }
+    .themeToggleBtn:hover{
+      border-color:rgba(122,162,255,.62);
+      background:rgba(122,162,255,.10);
+      transform:translateY(-1px);
+    }
+    .themeToggleBtn:active{
+      transform:translateY(0);
+    }
+    .themeToggleBtn .ico{
+      font-size:16px;
+    }
+    :root[data-theme="light"]{
+      --bg:#e7dcc8;
+      --bg-deep:#d8ccb7;
+      --bg-soft:#efe6d7;
+      --panel:#fffaf0;
+      --panel-strong:#fffdf7;
+      --panel-soft:#f2e9d9;
+      --text:#3a2a22;
+      --muted:#6c584b;
+      --line:#d5c2a1;
+      --line-strong:#b78d55;
+      --accent:#7a3040;
+      --accent-strong:#5d2531;
+      --accent-soft:#9a5160;
+      --accent2:#c39a5d;
+      --danger:#9a3f46;
+      --shadow:0 18px 36px rgba(86,58,34,.12), 0 6px 14px rgba(86,58,34,.08);
+      --shadow-soft:0 10px 22px rgba(86,58,34,.08);
+    }
+    :root[data-theme="light"] body{
+      background:
+        radial-gradient(circle at top, rgba(255,255,255,.72), transparent 34%),
+        linear-gradient(180deg, #f7f0e4 0%, #ece1cf 30%, #ddd0bb 100%);
+    }
+    :root[data-theme="light"] body::before{
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.24), transparent 28%, rgba(165,126,84,.06) 68%, transparent 100%),
+        repeating-linear-gradient(0deg, rgba(124,88,57,.03) 0, rgba(124,88,57,.03) 2px, transparent 2px, transparent 5px);
+      opacity:.42;
+      mix-blend-mode:multiply;
+    }
+    :root[data-theme="light"] .brandTitle{
+      color:#5b2a31;
+    }
+    :root[data-theme="light"] .brandTitle::after{
+      background:linear-gradient(90deg, rgba(122,48,64,.75), rgba(195,154,93,.68));
+    }
+    :root[data-theme="light"] .todayLine{
+      color:#6b5646;
+    }
+    :root[data-theme="light"] .themeToggleBtn{
+      border-color:rgba(122,48,64,.22);
+      background:rgba(122,48,64,.06);
+      color:#6a2b37;
+      box-shadow:0 4px 14px rgba(86,58,34,.10);
+    }
+    :root[data-theme="light"] .themeToggleBtn:hover{
+      border-color:rgba(122,48,64,.42);
+      background:rgba(122,48,64,.12);
+    }
+    :root[data-theme="light"] .card{
+      background:rgba(255,252,245,.74);
+      backdrop-filter:blur(6px);
+    }
+    :root[data-theme="light"] .cardHeader{
+      background:rgba(122,48,64,.06);
+    }
+    :root[data-theme="light"] .btn,
+    :root[data-theme="light"] .tab{
+      background:rgba(122,48,64,.03);
+    }
+    :root[data-theme="light"] .btn:hover,
+    :root[data-theme="light"] .tab:hover{
+      background:rgba(122,48,64,.07);
+    }
+    :root[data-theme="light"] .btn.primary{
+      background:rgba(122,48,64,.10);
+      border-color:rgba(122,48,64,.30);
+    }
+    :root[data-theme="light"] .btn.danger{
+      background:rgba(154,63,70,.08);
+      border-color:rgba(154,63,70,.25);
+    }
+    :root[data-theme="light"] .bookmarkTab{
+      color:#fdf9f1;
+      box-shadow:0 12px 20px rgba(86,58,34,.10);
+    }
+    :root[data-theme="light"] .bookmarkTab--calendar{
+      background:linear-gradient(180deg, rgba(139,64,79,.96), rgba(104,43,56,.98));
+    }
+    :root[data-theme="light"] .bookmarkTab--notebook{
+      background:linear-gradient(180deg, rgba(95,112,90,.96), rgba(70,86,66,.98));
+      border-color:rgba(120,111,79,.28);
+    }
+    :root[data-theme="light"] .bookmarkTab--contacts{
+      background:linear-gradient(180deg, rgba(173,122,66,.96), rgba(138,95,51,.98));
+      border-color:rgba(176,138,74,.30);
+    }
+    :root[data-theme="light"] .bookmarkTab--today{
+      background:linear-gradient(180deg, rgba(175,106,77,.96), rgba(142,78,52,.98));
+      border-color:rgba(176,138,74,.28);
+    }
+    :root[data-theme="light"] .bookmarkTab.active{
+      box-shadow:0 14px 24px rgba(86,58,34,.14);
+      filter:saturate(1.02) brightness(1.02);
+    }
+    @media (max-width: 860px){
+      .brandRow{
+        width:100%;
+      }
+    }
+  </style>
+
 </head>
 <body>
   <div class="wrap">
@@ -24,7 +172,12 @@
       <div class="headerTop">
         <div class="headLeft">
           <div class="brandBlock">
-            <h1 class="brandTitle">SDAC Agenda</h1>
+            <div class="brandRow">
+              <h1 class="brandTitle">SDAC Agenda</h1>
+              <button class="btn iconBtn themeToggleBtn" id="themeToggleBtn" type="button" title="Passa alla modalità chiara" aria-label="Passa alla modalità chiara">
+                <span class="ico" id="themeToggleIcon">☀️</span>
+              </button>
+            </div>
             <div id="todayLine" class="todayLine"></div>
           </div>
         </div>
