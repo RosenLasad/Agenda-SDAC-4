@@ -3,6 +3,9 @@
 
     var START_YEAR = 2026;
     var STORAGE_KEY = "sdac_agenda_2026_v1";
+    var THEME_KEY = "sdac_agenda_theme";
+    var THEME_META_DARK = "#9f1020";
+    var THEME_META_LIGHT = "#efe6d7";
 
     var MONTHS_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
     var DOW_IT = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"];
@@ -449,6 +452,47 @@
     }
     // --- /Cloud sync ---
 
+
+    function getSavedTheme(){
+      try{
+        var stored = localStorage.getItem(THEME_KEY);
+        return stored === "light" ? "light" : "dark";
+      }catch(e){
+        return "dark";
+      }
+    }
+
+    function getThemeMeta(){
+      return document.getElementById("themeColorMeta") || document.querySelector('meta[name="theme-color"]');
+    }
+
+    function updateThemeToggleUi(){
+      if(!themeToggleBtn) return;
+      var currentTheme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      var nextLabel = currentTheme === "light" ? "Passa alla modalità scura" : "Passa alla modalità chiara";
+      if(themeToggleIcon) themeToggleIcon.textContent = currentTheme === "light" ? "🌙" : "☀️";
+      themeToggleBtn.title = nextLabel;
+      themeToggleBtn.setAttribute("aria-label", nextLabel);
+      themeToggleBtn.setAttribute("aria-pressed", currentTheme === "light" ? "true" : "false");
+    }
+
+    function applyTheme(theme, persist){
+      var normalizedTheme = theme === "light" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", normalizedTheme);
+      document.documentElement.style.colorScheme = normalizedTheme;
+      var meta = getThemeMeta();
+      if(meta) meta.setAttribute("content", normalizedTheme === "light" ? THEME_META_LIGHT : THEME_META_DARK);
+      if(persist !== false){
+        try{ localStorage.setItem(THEME_KEY, normalizedTheme); }catch(e){}
+      }
+      updateThemeToggleUi();
+    }
+
+    function toggleTheme(){
+      var currentTheme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      applyTheme(currentTheme === "light" ? "dark" : "light");
+    }
+
     // DOM
     var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
     var viewCalendar = $("#view-calendar");
@@ -464,6 +508,8 @@
     var jumpToday = $("#jumpToday");
 
     var storageStatus = $("#storageStatus");
+    var themeToggleBtn = $("#themeToggleBtn");
+    var themeToggleIcon = $("#themeToggleIcon");
     var agendaWeekCard = $("#agendaWeekCard");
     var todoMiniPanel = $("#todoMiniPanel");
     var toggleTodos = $("#toggleTodos");
@@ -2206,6 +2252,7 @@ todoActiveList.appendChild(item);
     }
 
     // Init
+    applyTheme(getSavedTheme(), false);
     var now = new Date();
     currentYear = now.getFullYear();
     currentMonth = now.getMonth();
@@ -2314,6 +2361,11 @@ if(installBtn){
 
 if(btnCloudRefresh){
   btnCloudRefresh.addEventListener("click", handleManualCloudRefresh);
+}
+
+if(themeToggleBtn){
+  themeToggleBtn.addEventListener("click", toggleTheme);
+  updateThemeToggleUi();
 }
 
 if("serviceWorker" in navigator){
