@@ -263,12 +263,116 @@
       };
     }
 
+function defaultDataHubLinks(){
+  return {
+    site: "https://www.sdac.it",
+    email: "https://mail.google.com/mail/u/2/#inbox",
+    drive: "https://drive.google.com/drive/u/2/my-drive",
+    youtube: "https://studio.youtube.com/channel/UCupEGaihvrvbGr35c80h4QQ",
+    facebook: "https://www.facebook.com/sdac.genova",
+    instagram: "https://www.instagram.com/sdac.genova/",
+    tiktok: "https://www.tiktok.com/@sdac.genova"
+  };
+}
+
+function getCurrentMonthKey(){
+  var d = new Date();
+  return d.getFullYear() + "-" + pad2(d.getMonth()+1);
+}
+
+function normalizeDataLinks(raw){
+  var defaults = defaultDataHubLinks();
+  var next = raw && typeof raw === "object" ? raw : {};
+  return {
+    site: String(next.site || defaults.site || "").trim(),
+    email: String(next.email || defaults.email || "").trim(),
+    drive: String(next.drive || defaults.drive || "").trim(),
+    youtube: String(next.youtube || defaults.youtube || "").trim(),
+    facebook: String(next.facebook || defaults.facebook || "").trim(),
+    instagram: String(next.instagram || defaults.instagram || "").trim(),
+    tiktok: String(next.tiktok || defaults.tiktok || "").trim()
+  };
+}
+
+function normalizeDataItem(item){
+  var d = item && typeof item === "object" ? item : {};
+  var date = String(d.date || "").trim();
+  var month = String(d.month || "").trim();
+  if(!month && /^\d{4}-\d{2}-\d{2}$/.test(date)) month = date.slice(0,7);
+  if(!month) month = getCurrentMonthKey();
+  function toInt(value){
+    var n = parseInt(value, 10);
+    return isNaN(n) ? 0 : Math.max(0, n);
+  }
+  return {
+    id: d.id || uid(),
+    platform: String(d.platform || "").trim().toLowerCase(),
+    month: month,
+    date: date,
+    title: String(d.title || "").trim(),
+    views: toInt(d.views),
+    likes: toInt(d.likes),
+    link: String(d.link || "").trim(),
+    notes: String(d.notes || "").trim(),
+    createdAt: d.createdAt || new Date().toISOString(),
+    updatedAt: d.updatedAt || d.createdAt || new Date().toISOString()
+  };
+}
+
+function defaultDataHubUi(){
+  return {
+    collapsed: {
+      facebook: false,
+      instagram: false,
+      youtube: false,
+      tiktok: false
+    }
+  };
+}
+
+function normalizeDataHubUi(raw){
+  var collapsed = raw && typeof raw === "object" && raw.collapsed && typeof raw.collapsed === "object" ? raw.collapsed : {};
+  return {
+    collapsed: {
+      facebook: !!collapsed.facebook,
+      instagram: !!collapsed.instagram,
+      youtube: !!collapsed.youtube,
+      tiktok: !!collapsed.tiktok
+    }
+  };
+}
+
+function defaultDataHubState(){
+  return {
+    selectedMonth: getCurrentMonthKey(),
+    links: defaultDataHubLinks(),
+    items: [],
+    ui: defaultDataHubUi()
+  };
+}
+
+function normalizeDataHub(raw){
+  var base = defaultDataHubState();
+  var next = raw && typeof raw === "object" ? raw : {};
+  var items = Array.isArray(next.items) ? next.items.map(normalizeDataItem).filter(function(item){
+    return ["facebook","instagram","youtube","tiktok"].indexOf(item.platform) !== -1;
+  }) : [];
+  var selectedMonth = /^\d{4}-\d{2}$/.test(String(next.selectedMonth || "")) ? String(next.selectedMonth) : base.selectedMonth;
+  return {
+    selectedMonth: selectedMonth,
+    links: normalizeDataLinks(next.links),
+    items: items,
+    ui: normalizeDataHubUi(next.ui)
+  };
+}
+
     function normalizeLoadedState(obj){
       var next = obj && typeof obj === "object" ? obj : {};
       if(!next.events) next.events = {};
       if(!Array.isArray(next.todos)) next.todos = [];
       next.notes = normalizeNotesState(next.notes);
       if(!Array.isArray(next.contacts)) next.contacts = [];
+      next.dataHub = normalizeDataHub(next.dataHub);
       next.updatedAt = next.updatedAt || new Date().toISOString();
       return next;
     }
@@ -280,7 +384,8 @@
         events:{},
         todos:[],
         notes: normalizeNotesState(null),
-        contacts:[]
+        contacts:[],
+        dataHub: defaultDataHubState()
       };
     }
 
@@ -353,13 +458,16 @@
     function hasLocalData(s){
       try{
         var notesState = normalizeNotesState(s && s.notes);
+        var dataHub = normalizeDataHub(s && s.dataHub);
         return !!(s && (
           Object.keys(s.events || {}).length ||
           (s.todos || []).length ||
           (s.contacts || []).length ||
           (notesState.items || []).length ||
           String(notesState.draftTitle || "").trim().length ||
-          String(notesState.draftBody || "").trim().length
+          String(notesState.draftBody || "").trim().length ||
+          (dataHub.items || []).length ||
+          ["youtube","facebook","instagram","tiktok"].some(function(key){ return !!String(dataHub.links[key] || "").trim(); })
         ));
       }catch(e){ return false; }
     }
@@ -452,46 +560,45 @@
     }
     // --- /Cloud sync ---
 
+function getSavedTheme(){
+  try{
+    var stored = localStorage.getItem(THEME_KEY);
+    return stored === "light" ? "light" : "dark";
+  }catch(e){
+    return "dark";
+  }
+}
 
-    function getSavedTheme(){
-      try{
-        var stored = localStorage.getItem(THEME_KEY);
-        return stored === "light" ? "light" : "dark";
-      }catch(e){
-        return "dark";
-      }
-    }
+function getThemeMeta(){
+  return document.getElementById("themeColorMeta") || document.querySelector('meta[name="theme-color"]');
+}
 
-    function getThemeMeta(){
-      return document.getElementById("themeColorMeta") || document.querySelector('meta[name="theme-color"]');
-    }
+function updateThemeToggleUi(){
+  if(!themeToggleBtn) return;
+  var currentTheme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  var nextLabel = currentTheme === "light" ? "Passa alla modalità scura" : "Passa alla modalità chiara";
+  if(themeToggleIcon) themeToggleIcon.textContent = currentTheme === "light" ? "🌙" : "☀️";
+  themeToggleBtn.title = nextLabel;
+  themeToggleBtn.setAttribute("aria-label", nextLabel);
+  themeToggleBtn.setAttribute("aria-pressed", currentTheme === "light" ? "true" : "false");
+}
 
-    function updateThemeToggleUi(){
-      if(!themeToggleBtn) return;
-      var currentTheme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
-      var nextLabel = currentTheme === "light" ? "Passa alla modalità scura" : "Passa alla modalità chiara";
-      if(themeToggleIcon) themeToggleIcon.textContent = currentTheme === "light" ? "🌙" : "☀️";
-      themeToggleBtn.title = nextLabel;
-      themeToggleBtn.setAttribute("aria-label", nextLabel);
-      themeToggleBtn.setAttribute("aria-pressed", currentTheme === "light" ? "true" : "false");
-    }
+function applyTheme(theme, persist){
+  var normalizedTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", normalizedTheme);
+  document.documentElement.style.colorScheme = normalizedTheme;
+  var meta = getThemeMeta();
+  if(meta) meta.setAttribute("content", normalizedTheme === "light" ? THEME_META_LIGHT : THEME_META_DARK);
+  if(persist !== false){
+    try{ localStorage.setItem(THEME_KEY, normalizedTheme); }catch(e){}
+  }
+  updateThemeToggleUi();
+}
 
-    function applyTheme(theme, persist){
-      var normalizedTheme = theme === "light" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", normalizedTheme);
-      document.documentElement.style.colorScheme = normalizedTheme;
-      var meta = getThemeMeta();
-      if(meta) meta.setAttribute("content", normalizedTheme === "light" ? THEME_META_LIGHT : THEME_META_DARK);
-      if(persist !== false){
-        try{ localStorage.setItem(THEME_KEY, normalizedTheme); }catch(e){}
-      }
-      updateThemeToggleUi();
-    }
-
-    function toggleTheme(){
-      var currentTheme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
-      applyTheme(currentTheme === "light" ? "dark" : "light");
-    }
+function toggleTheme(){
+  var currentTheme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  applyTheme(currentTheme === "light" ? "dark" : "light");
+}
 
     // DOM
     var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
@@ -499,6 +606,7 @@
     var viewNotebook = $("#view-notebook");
     var viewContacts = $("#view-contacts");
     var viewToday = $("#view-today");
+    var viewData = $("#view-data");
 
     var calListGrid = $("#calListGrid");
 
@@ -545,6 +653,19 @@
 
     var todayPrevBtn = $("#todayPrevBtn");
     var todayNextBtn = $("#todayNextBtn");
+
+    var dataYearSelect = $("#dataYearSelect");
+    var dataMonthSelect = $("#dataMonthSelect");
+    var dataSummaryCount = $("#dataSummaryCount");
+    var dataSummaryViews = $("#dataSummaryViews");
+    var dataSummaryLikes = $("#dataSummaryLikes");
+    var dataLinkSite = $("#dataLinkSite");
+    var dataLinkEmail = $("#dataLinkEmail");
+    var dataLinkDrive = $("#dataLinkDrive");
+    var dataLinkYouTube = $("#dataLinkYouTube");
+    var dataLinkFacebook = $("#dataLinkFacebook");
+    var dataLinkInstagram = $("#dataLinkInstagram");
+    var dataLinkTikTok = $("#dataLinkTikTok");
 
     function getNotesState(){
       if(!state.notes || typeof state.notes !== "object") state.notes = normalizeNotesState(state.notes);
@@ -867,6 +988,360 @@
       startNewNote();
     }
 
+var DATA_PLATFORMS = ["facebook","instagram","youtube","tiktok"];
+var DATA_PLATFORM_LABELS = {
+  facebook: "Facebook",
+  instagram: "Instagram",
+  youtube: "YouTube",
+  tiktok: "TikTok"
+};
+var DATA_MONTH_LABELS = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+var dataEditingIds = { facebook:null, instagram:null, youtube:null, tiktok:null };
+var dataDom = {
+  facebook: {
+    card: $("#dataFacebookCard"), header: $("#dataFacebookHeader"), body: $("#dataFacebookBody"), meta: $("#dataFacebookMeta"), date: $("#dataFacebookDate"), title: $("#dataFacebookTitle"), views: $("#dataFacebookViews"), likes: $("#dataFacebookLikes"), link: $("#dataFacebookLink"), notes: $("#dataFacebookNotes"), save: $("#dataFacebookSave"), cancel: $("#dataFacebookCancel"), list: $("#dataFacebookList")
+  },
+  instagram: {
+    card: $("#dataInstagramCard"), header: $("#dataInstagramHeader"), body: $("#dataInstagramBody"), meta: $("#dataInstagramMeta"), date: $("#dataInstagramDate"), title: $("#dataInstagramTitle"), views: $("#dataInstagramViews"), likes: $("#dataInstagramLikes"), link: $("#dataInstagramLink"), notes: $("#dataInstagramNotes"), save: $("#dataInstagramSave"), cancel: $("#dataInstagramCancel"), list: $("#dataInstagramList")
+  },
+  youtube: {
+    card: $("#dataYouTubeCard"), header: $("#dataYouTubeHeader"), body: $("#dataYouTubeBody"), meta: $("#dataYouTubeMeta"), date: $("#dataYouTubeDate"), title: $("#dataYouTubeTitle"), views: $("#dataYouTubeViews"), likes: $("#dataYouTubeLikes"), link: $("#dataYouTubeLink"), notes: $("#dataYouTubeNotes"), save: $("#dataYouTubeSave"), cancel: $("#dataYouTubeCancel"), list: $("#dataYouTubeList")
+  },
+  tiktok: {
+    card: $("#dataTikTokCard"), header: $("#dataTikTokHeader"), body: $("#dataTikTokBody"), meta: $("#dataTikTokMeta"), date: $("#dataTikTokDate"), title: $("#dataTikTokTitle"), views: $("#dataTikTokViews"), likes: $("#dataTikTokLikes"), link: $("#dataTikTokLink"), notes: $("#dataTikTokNotes"), save: $("#dataTikTokSave"), cancel: $("#dataTikTokCancel"), list: $("#dataTikTokList")
+  }
+};
+
+function getDataHub(){
+  if(!state.dataHub || typeof state.dataHub !== "object") state.dataHub = normalizeDataHub(state.dataHub);
+  return state.dataHub;
+}
+
+function parseMonthKey(value){
+  var raw = String(value || "");
+  if(!/^\d{4}-\d{2}$/.test(raw)) raw = getCurrentMonthKey();
+  return { year: parseInt(raw.slice(0,4), 10), month: parseInt(raw.slice(5,7), 10) };
+}
+
+function formatNumberIt(value){
+  try{ return new Intl.NumberFormat("it-IT").format(Number(value || 0)); }catch(e){ return String(value || 0); }
+}
+
+function formatDataDate(value){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return "Data non indicata";
+  var d = parseISO(value);
+  return d.getDate() + " " + MONTHS_IT[d.getMonth()] + " " + d.getFullYear();
+}
+
+function getSelectedDataMonth(){
+  return getDataHub().selectedMonth || getCurrentMonthKey();
+}
+
+function setSelectedDataMonth(value){
+  var normalized = /^\d{4}-\d{2}$/.test(String(value || "")) ? String(value) : getCurrentMonthKey();
+  getDataHub().selectedMonth = normalized;
+  if(dataYearSelect && dataMonthSelect){
+    var parsed = parseMonthKey(normalized);
+    dataYearSelect.value = String(parsed.year);
+    dataMonthSelect.value = pad2(parsed.month);
+  }
+}
+
+function getAvailableDataYears(){
+  var years = {};
+  var current = new Date().getFullYear();
+  years[current] = true;
+  getDataHub().items.forEach(function(item){
+    if(/^\d{4}-\d{2}$/.test(item.month)) years[item.month.slice(0,4)] = true;
+  });
+  return Object.keys(years).map(function(v){ return parseInt(v,10); }).sort(function(a,b){ return b-a; });
+}
+
+function syncDataMonthControls(){
+  if(!dataYearSelect || !dataMonthSelect) return;
+  var selected = parseMonthKey(getSelectedDataMonth());
+  var years = getAvailableDataYears();
+  dataYearSelect.innerHTML = "";
+  years.forEach(function(year){
+    var opt = document.createElement("option");
+    opt.value = String(year);
+    opt.textContent = String(year);
+    if(year === selected.year) opt.selected = true;
+    dataYearSelect.appendChild(opt);
+  });
+  dataMonthSelect.innerHTML = "";
+  DATA_MONTH_LABELS.forEach(function(label, idx){
+    var value = pad2(idx+1);
+    var opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = label;
+    if((idx+1) === selected.month) opt.selected = true;
+    dataMonthSelect.appendChild(opt);
+  });
+}
+
+function getDataItemsForPlatform(platform){
+  var month = getSelectedDataMonth();
+  return getDataHub().items.filter(function(item){
+    return item.platform === platform && item.month === month;
+  }).sort(function(a,b){
+    var ad = String(a.date || "");
+    var bd = String(b.date || "");
+    if(ad !== bd) return bd.localeCompare(ad);
+    return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+  });
+}
+
+function getDataMonthTotals(){
+  var month = getSelectedDataMonth();
+  return getDataHub().items.filter(function(item){ return item.month === month; }).reduce(function(acc, item){
+    acc.count += 1;
+    acc.views += Number(item.views || 0);
+    acc.likes += Number(item.likes || 0);
+    return acc;
+  }, { count:0, views:0, likes:0 });
+}
+
+function isDataPlatformCollapsed(platform){
+  var hub = getDataHub();
+  if(!hub.ui || typeof hub.ui !== "object") hub.ui = defaultDataHubUi();
+  if(!hub.ui.collapsed || typeof hub.ui.collapsed !== "object") hub.ui.collapsed = defaultDataHubUi().collapsed;
+  return !!hub.ui.collapsed[platform];
+}
+
+function setDataPlatformCollapsed(platform, collapsed){
+  var hub = getDataHub();
+  if(!hub.ui || typeof hub.ui !== "object") hub.ui = defaultDataHubUi();
+  if(!hub.ui.collapsed || typeof hub.ui.collapsed !== "object") hub.ui.collapsed = defaultDataHubUi().collapsed;
+  hub.ui.collapsed[platform] = !!collapsed;
+  var dom = dataDom[platform];
+  if(!dom || !dom.card) return;
+  dom.card.classList.toggle("collapsed", !!collapsed);
+  if(dom.header) dom.header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+}
+
+function toggleDataPlatform(platform){
+  var nextState = !isDataPlatformCollapsed(platform);
+  setDataPlatformCollapsed(platform, nextState);
+  if(!nextState){
+    var dom = dataDom[platform];
+    setTimeout(function(){
+      try{ if(dom && dom.title) dom.title.focus(); }catch(e){}
+    }, 40);
+  }
+  touchAndSave();
+}
+
+function wireDataPlatformCollapse(platform){
+  var dom = dataDom[platform];
+  if(!dom || !dom.header || !dom.card) return;
+  dom.header.addEventListener("click", function(e){
+    if(e.target && e.target.closest && e.target.closest("button")) return;
+    toggleDataPlatform(platform);
+  });
+  dom.header.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){
+      e.preventDefault();
+      toggleDataPlatform(platform);
+    }
+  });
+}
+
+function updateDataLinksUi(){
+  var links = getDataHub().links;
+  var map = [
+    [dataLinkSite, links.site, "Sito SDAC"],
+    [dataLinkEmail, links.email, "Email SDAC"],
+    [dataLinkDrive, links.drive, "Drive SDAC"],
+    [dataLinkYouTube, links.youtube, "YouTube"],
+    [dataLinkFacebook, links.facebook, "Facebook"],
+    [dataLinkInstagram, links.instagram, "Instagram"],
+    [dataLinkTikTok, links.tiktok, "TikTok"]
+  ];
+  map.forEach(function(entry){
+    var node = entry[0];
+    var href = String(entry[1] || "").trim();
+    if(!node) return;
+    node.classList.toggle("isDisabled", !href);
+    node.setAttribute("href", href || "#");
+    node.setAttribute("aria-disabled", href ? "false" : "true");
+    node.title = href ? ("Apri " + entry[2]) : ("Link non disponibile: " + entry[2]);
+  });
+}
+
+function setDataFormDefaults(platform){
+  var dom = dataDom[platform];
+  if(!dom) return;
+  var selectedMonth = getSelectedDataMonth();
+  var parsed = parseMonthKey(selectedMonth);
+  if(dom.date && !dom.date.value) dom.date.value = selectedMonth + "-01";
+  dataEditingIds[platform] = null;
+  if(dom.title) dom.title.value = "";
+  if(dom.views) dom.views.value = "";
+  if(dom.likes) dom.likes.value = "";
+  if(dom.link) dom.link.value = "";
+  if(dom.notes) dom.notes.value = "";
+  if(dom.date) dom.date.value = selectedMonth + "-01";
+  if(dom.save) dom.save.textContent = "Aggiungi";
+  if(dom.cancel) dom.cancel.classList.add("hidden");
+}
+
+function cancelDataEdit(platform){
+  setDataFormDefaults(platform);
+}
+
+function openDataEdit(platform, id){
+  var dom = dataDom[platform];
+  var item = getDataHub().items.find(function(entry){ return entry.id === id && entry.platform === platform; }) || null;
+  if(!dom || !item) return;
+  setDataPlatformCollapsed(platform, false);
+  dataEditingIds[platform] = id;
+  if(dom.title) dom.title.value = item.title || "";
+  if(dom.views) dom.views.value = item.views || 0;
+  if(dom.likes) dom.likes.value = item.likes || 0;
+  if(dom.link) dom.link.value = item.link || "";
+  if(dom.notes) dom.notes.value = item.notes || "";
+  if(dom.date) dom.date.value = item.date || (item.month + "-01");
+  if(dom.save) dom.save.textContent = "Salva modifiche";
+  if(dom.cancel) dom.cancel.classList.remove("hidden");
+  try{ if(dom.title) dom.title.focus(); }catch(e){}
+}
+
+function deleteDataItem(id){
+  var hub = getDataHub();
+  var item = hub.items.find(function(entry){ return entry.id === id; });
+  if(!item) return;
+  if(!window.confirm('Vuoi eliminare "' + (item.title || 'questo contenuto') + '"?')) return;
+  hub.items = hub.items.filter(function(entry){ return entry.id !== id; });
+  dataEditingIds[item.platform] = null;
+  touchAndSave();
+  renderDataHub();
+}
+
+function saveDataItem(platform){
+  var dom = dataDom[platform];
+  if(!dom) return;
+  var title = String((dom.title && dom.title.value) || "").trim();
+  if(!title){ if(dom.title) dom.title.focus(); return; }
+  var dateValue = String((dom.date && dom.date.value) || "").trim();
+  var selectedMonth = getSelectedDataMonth();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) dateValue = selectedMonth + "-01";
+  var record = normalizeDataItem({
+    id: dataEditingIds[platform] || uid(),
+    platform: platform,
+    month: dateValue.slice(0,7),
+    date: dateValue,
+    title: title,
+    views: (dom.views && dom.views.value) || 0,
+    likes: (dom.likes && dom.likes.value) || 0,
+    link: (dom.link && dom.link.value) || "",
+    notes: (dom.notes && dom.notes.value) || "",
+    updatedAt: new Date().toISOString()
+  });
+  var hub = getDataHub();
+  var idx = hub.items.findIndex(function(entry){ return entry.id === record.id; });
+  if(idx >= 0){
+    record.createdAt = hub.items[idx].createdAt || record.createdAt;
+    hub.items[idx] = record;
+  }else{
+    hub.items.unshift(record);
+  }
+  hub.selectedMonth = record.month;
+  touchAndSave();
+  renderDataHub();
+  setTimeout(function(){ try{ if(dom.title) dom.title.focus(); }catch(e){} }, 20);
+}
+
+function renderDataPlatform(platform){
+  var dom = dataDom[platform];
+  if(!dom || !dom.list) return;
+  var items = getDataItemsForPlatform(platform);
+  var totals = items.reduce(function(acc, item){
+    acc.views += Number(item.views || 0);
+    acc.likes += Number(item.likes || 0);
+    return acc;
+  }, { views:0, likes:0 });
+  if(dom.meta){
+    dom.meta.textContent = items.length + (items.length === 1 ? " contenuto" : " contenuti") + " · " + formatNumberIt(totals.views) + " views · " + formatNumberIt(totals.likes) + " like";
+  }
+  dom.list.innerHTML = "";
+  if(!items.length){
+    var empty = document.createElement("div");
+    empty.className = "emptyState";
+    empty.textContent = "Nessun contenuto registrato per questo mese.";
+    dom.list.appendChild(empty);
+  }else{
+    items.forEach(function(item){
+      var row = document.createElement("div");
+      row.className = "item dataItem";
+      var left = document.createElement("div");
+      left.className = "itemMain dataItemMain";
+      var text = document.createElement("div");
+      text.className = "itemText";
+      var title = document.createElement("div");
+      title.className = "t";
+      title.textContent = item.title || "Contenuto senza titolo";
+      var meta = document.createElement("div");
+      meta.className = "dataItemMeta";
+      meta.innerHTML = '<span class="badge">' + formatDataDate(item.date) + '</span><span class="badge">Views: ' + formatNumberIt(item.views) + '</span><span class="badge">Like: ' + formatNumberIt(item.likes) + '</span>';
+      text.appendChild(title);
+      text.appendChild(meta);
+      if(item.notes){
+        var notes = document.createElement("div");
+        notes.className = "s";
+        notes.textContent = item.notes;
+        text.appendChild(notes);
+      }
+      if(item.link){
+        var linkWrap = document.createElement("div");
+        linkWrap.className = "dataItemLinks";
+        var link = document.createElement("a");
+        link.href = item.link;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Apri contenuto";
+        link.className = "dataItemLink";
+        linkWrap.appendChild(link);
+        text.appendChild(linkWrap);
+      }
+      left.appendChild(text);
+      var actions = document.createElement("div");
+      actions.className = "itemActions";
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "smallBtn";
+      edit.textContent = "Modifica";
+      edit.addEventListener("click", function(){ openDataEdit(platform, item.id); });
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "smallBtn danger";
+      del.textContent = "Elimina";
+      del.addEventListener("click", function(){ deleteDataItem(item.id); });
+      actions.appendChild(edit);
+      actions.appendChild(del);
+      row.appendChild(left);
+      row.appendChild(actions);
+      dom.list.appendChild(row);
+    });
+  }
+  if(!dataEditingIds[platform]) setDataFormDefaults(platform);
+  if(dom.cancel) dom.cancel.classList.toggle("hidden", !dataEditingIds[platform]);
+  if(dom.save) dom.save.textContent = dataEditingIds[platform] ? "Salva modifiche" : "Aggiungi";
+  setDataPlatformCollapsed(platform, isDataPlatformCollapsed(platform));
+}
+
+function renderDataHub(){
+  if(!viewData) return;
+  var hub = getDataHub();
+  syncDataMonthControls();
+  updateDataLinksUi();
+  var totals = getDataMonthTotals();
+  if(dataSummaryCount) dataSummaryCount.textContent = formatNumberIt(totals.count);
+  if(dataSummaryViews) dataSummaryViews.textContent = formatNumberIt(totals.views);
+  if(dataSummaryLikes) dataSummaryLikes.textContent = formatNumberIt(totals.likes);
+  DATA_PLATFORMS.forEach(renderDataPlatform);
+}
+
     // Contacts
     var contactSearch = $("#contactSearch");
     var contactCategoryFilter = $("#contactCategoryFilter");
@@ -1041,6 +1516,7 @@ resetEventForm();
       if(viewNotebook) viewNotebook.classList.toggle("hidden", view !== "notebook");
       if(viewContacts) viewContacts.classList.toggle("hidden", view !== "contacts");
       if(viewToday) viewToday.classList.toggle("hidden", view !== "today");
+      if(viewData) viewData.classList.toggle("hidden", view !== "data");
 
       if(view === "calendar") renderSummary();
       if(view === "notebook"){
@@ -1049,6 +1525,7 @@ resetEventForm();
       }
       if(view === "contacts") renderContacts();
       if(view === "today") renderTodayPanel();
+      if(view === "data") renderDataHub();
     }
 
 function getTodayViewDate(){
@@ -2155,6 +2632,7 @@ todoActiveList.appendChild(item);
       renderSummary();
       renderContacts();
       renderTodayPanel();
+      renderDataHub();
     }
 
     // Wire
@@ -2243,19 +2721,57 @@ todoActiveList.appendChild(item);
       });
     }
 
-    if(quickNotes){
-      quickNotes.addEventListener("input", function(){
-        var notesState = getNotesState();
-        notesState.draftBody = quickNotes.value;
-        touchAndSave();
-      });
-    }
+if(quickNotes){
+  quickNotes.addEventListener("input", function(){
+    var notesState = getNotesState();
+    notesState.draftBody = quickNotes.value;
+    touchAndSave();
+  });
+}
 
-    // Init
-    applyTheme(getSavedTheme(), false);
+if(themeToggleBtn){
+  themeToggleBtn.addEventListener("click", toggleTheme);
+}
+
+if(dataYearSelect){
+  dataYearSelect.addEventListener("change", function(){
+    setSelectedDataMonth(String(dataYearSelect.value) + "-" + String((dataMonthSelect && dataMonthSelect.value) || "01"));
+    renderDataHub();
+    touchAndSave();
+  });
+}
+
+if(dataMonthSelect){
+  dataMonthSelect.addEventListener("change", function(){
+    setSelectedDataMonth(String((dataYearSelect && dataYearSelect.value) || new Date().getFullYear()) + "-" + String(dataMonthSelect.value || "01"));
+    renderDataHub();
+    touchAndSave();
+  });
+}
+
+[dataLinkSite, dataLinkEmail, dataLinkDrive, dataLinkYouTube, dataLinkFacebook, dataLinkInstagram, dataLinkTikTok].forEach(function(anchor){
+  if(anchor){
+    anchor.addEventListener("click", function(ev){
+      if(anchor.classList.contains("isDisabled")) ev.preventDefault();
+    });
+  }
+});
+
+DATA_PLATFORMS.forEach(function(platform){
+  var dom = dataDom[platform];
+  if(!dom) return;
+  wireDataPlatformCollapse(platform);
+  if(dom.save) dom.save.addEventListener("click", function(){ saveDataItem(platform); });
+  if(dom.cancel) dom.cancel.addEventListener("click", function(){ cancelDataEdit(platform); renderDataPlatform(platform); });
+  if(dom.title) dom.title.addEventListener("keydown", function(ev){ if(ev.key === "Enter"){ ev.preventDefault(); saveDataItem(platform); } });
+});
+
+// Init
     var now = new Date();
     currentYear = now.getFullYear();
     currentMonth = now.getMonth();
+    applyTheme(getSavedTheme(), false);
+    setSelectedDataMonth(getDataHub().selectedMonth || getCurrentMonthKey());
     syncNotesUiFromState();
     renderAll();
     syncTodoMiniPanelAria();
@@ -2361,11 +2877,6 @@ if(installBtn){
 
 if(btnCloudRefresh){
   btnCloudRefresh.addEventListener("click", handleManualCloudRefresh);
-}
-
-if(themeToggleBtn){
-  themeToggleBtn.addEventListener("click", toggleTheme);
-  updateThemeToggleUi();
 }
 
 if("serviceWorker" in navigator){
